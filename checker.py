@@ -158,7 +158,11 @@ class RumorChecker:
         keywords = [kw.strip() for kw in keywords if kw.strip()]
         return keywords
     
-    def _search_with_duckduckgo(self, query: str, max_results: int = 5):
+    def _search_with_duckduckgo(self, lang: str, query: str, max_results: int = 5):
+        if lang == "zh":
+            region = 'zh-cn'
+        else:
+            region = 'us-en'
         try:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -168,8 +172,8 @@ class RumorChecker:
             ddgs = DDGS(timeout=60, headers=headers)
             results = []
             for kw in query_keyword:
-                print(f"Searching DuckDuckGo with keyword: {kw}\n")
-                results.extend(list(ddgs.text(kw, region='zh-cn', max_results=max_results)))
+                # print(f"Searching DuckDuckGo with keyword: {kw}\n")
+                results.extend(list(ddgs.text(kw, region=region, max_results=max_results)))
 
             evidence_docs = []
             for result in results:
@@ -224,7 +228,7 @@ class RumorChecker:
         all_evidence = []
         for lang, translated_claim in translations.items():
             # print(f"Searching in language: {lang} for claim: {translated_claim}\n")
-            evidence_docs = self._search_with_duckduckgo(translated_claim)
+            evidence_docs = self._search_with_duckduckgo(lang, translated_claim)
             for doc in evidence_docs:
                 doc['search_language'] = lang
                 doc['search_query'] = translated_claim
@@ -324,7 +328,7 @@ class RumorChecker:
     def check(self, claim: str):
         # 1. Extract key information from the claim
         key_info = self.extract_key_info(claim)
-        print(f"Key information extracted: {key_info}\n")
+        # print(f"Key information extracted: {key_info}\n")
 
         # 2. Search for related information using the API
         # TODO: Implement database search
