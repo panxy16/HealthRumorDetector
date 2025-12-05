@@ -1,6 +1,7 @@
 from openai import OpenAI
 from typing import Dict, List, Tuple, Any
 from duckduckgo_search import DDGS
+from FlagEmbedding import BGEM3FlagModel
 import requests
 import numpy as np
 import re
@@ -248,7 +249,40 @@ class RumorChecker:
         chunk_overlap: int = 50,
         top_k: int = 10,
     ):
-        optimized_evidence = evidence_docs
+        model = BGEM3FlagModel('BAAI/bge-m3',  
+                       use_fp16=True)
+        chunks = []
+        for doc in evidence_docs:
+            chunk_data = {
+                "text": doc["title"],
+                "url": doc["url"],
+            }
+            chunks.append(chunk_data)
+            snippet = doc["snippet"]
+            if len(snippet) <= chunk_size:
+                chunk_data = {
+                    "text": snippet,
+                    "url": doc["url"],
+                }
+                chunks.append(chunk_data)
+            else:
+                for i in range(0, len(snippet), chunk_size - chunk_overlap):
+                    chunk_text = snippet[i : i + chunk_size]
+                    chunk_data = {
+                        "text": chunk_text,
+                        "url": doc["url"],
+                    }
+                    chunks.append(chunk_data)
+        chunk_texts = [chunk["text"] for chunk in chunks]
+        claim_embedding = model.encode([claim],batch_size=12, max_length=8192)['dense_vecs']
+        evidence_embeddings = model.encode(chunk_texts,batch_size=12, max_length=8192)['dense_vecs']
+        similarities = claim_embedding @ evidence_embeddings.T
+        print(f"Similarities: {similarities}\n")
+        for i, similarity in enumerate(similarities[0]):
+            chunks[i]["similarity"] = similarity
+        ranked_chunks = sorted(chunks, key=lambda x: x["similarity"], reverse=True)
+        optimized_evidence = ranked_chunks[:top_k]
+        # optimized_evidence = evidence_docs
         return optimized_evidence
         
     def analyze_information(self, claim: str, evidence_chunks: List[Dict[str, str]]):
@@ -256,7 +290,7 @@ class RumorChecker:
         prompts = self._get_prompts()
         evidence_text = "\n\n".join(
             [
-                f"EVIDENCE {i+1} :\n{chunk['title']}\nSource: {chunk['url']}"
+                f"EVIDENCE {i+1} :\n{chunk['text']}\nSource: {chunk['url']}"
                 for i, chunk in enumerate(evidence_chunks)
             ]
         )
