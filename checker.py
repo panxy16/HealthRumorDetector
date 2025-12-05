@@ -159,7 +159,7 @@ class RumorChecker:
         keywords = [kw.strip() for kw in keywords if kw.strip()]
         return keywords
     
-    def _search_with_duckduckgo(self, lang: str, query: str, max_results: int = 5):
+    def _search_with_duckduckgo(self, lang: str, query: str, max_results: int = 10):
         if lang == "zh":
             region = 'zh-cn'
         else:
@@ -277,7 +277,7 @@ class RumorChecker:
         claim_embedding = model.encode([claim],batch_size=12, max_length=8192)['dense_vecs']
         evidence_embeddings = model.encode(chunk_texts,batch_size=12, max_length=8192)['dense_vecs']
         similarities = claim_embedding @ evidence_embeddings.T
-        print(f"Similarities: {similarities}\n")
+        # print(f"Similarities: {similarities}\n")
         for i, similarity in enumerate(similarities[0]):
             chunks[i]["similarity"] = similarity
         ranked_chunks = sorted(chunks, key=lambda x: x["similarity"], reverse=True)
