@@ -2,6 +2,7 @@ import checker
 import warnings
 warnings.simplefilter("ignore", RuntimeWarning)
 import pictureProcess
+from pathlib import Path
 
 # config
 API_KEY="sk-5e09567f3033401faabb0b622726fce4"
@@ -9,7 +10,7 @@ BASE_URL="https://api.deepseek.com/v1"
 MODEL_NAME="deepseek-chat"
 
 # get the claim
-print("Rumor Detection")
+print("----Rumor Detection----")
 upload_method = input("Choose upload method (Enter 1 for text, enter 2 for picture):")
 
 claim = ""
