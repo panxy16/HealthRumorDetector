@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大语言模型辅助辟谣系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #f0f5ff 0%, #e6f0ff 100%);
+            color: #2c3e50;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+       .logo {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    margin: 0 auto 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 20px rgba(74, 110, 224, 0.2);
+    transition: transform 0.3s ease;
+    overflow: hidden;
+    /* 移除或注释掉这行 */
+    /* background: linear-gradient(135deg, #4a6ee0 0%, #6a8eff 100%); */
+}
+
+.logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+        .title {
+            font-size: 32px;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: #6c7a89;
+            font-size: 16px;
+            font-weight: 400;
+        }
+
+        .examples {
+            background: rgba(240, 245, 255, 0.6);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 40px;
+            border: 1px solid rgba(200, 215, 255, 0.3);
+        }
+
+        .examples h3 {
+            margin-bottom: 20px;
+            color: #4a6ee0;
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .example-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            border-left: 4px solid #4a6ee0;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s ease;
+        }
+
+        .example-item:hover {
+            transform: translateY(-2px);
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(230, 235, 255, 0.5);
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 25px;
+            padding-right: 10px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 18px;
+            border-radius: 15px;
+            max-width: 80%;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s ease;
+        }
+
+        .message:hover {
+            transform: translateX(5px);
+        }
+
+        .user-message {
+            background: linear-gradient(135deg, #4a6ee0 0%, #6a8eff 100%);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+
+        .ai-message {
+            background: white;
+            color: #2c3e50;
+            border: 1px solid #e6edff;
+            border-bottom-left-radius: 5px;
+        }
+
+        .result-indicator {
+            display: inline-block;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-right: 12px;
+            font-size: 15px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .result-correct {
+            background-color: #B9CAAF;
+            color: #2d5016;
+        }
+
+        .result-incorrect {
+            background-color: #FFC7CE;
+            color: #7f1d1d;
+        }
+
+        .result-uncertain {
+            background-color: #DADADA;
+            color: #4b5563;
+        }
+
+        .input-area {
+    display: flex;
+    gap: 15px;
+    align-items: flex-end;
+    width: 100%;
+}
+
+.input-wrapper {
+    flex: 1;
+    position: relative;
+    min-width: 0; /* 防止flex item overflow */
+}
+
+#messageInput {
+    width: 100%;
+    padding: 18px;
+    border: 2px solid #e6edff;
+    border-radius: 15px;
+    resize: none;
+    font-family: inherit;
+    font-size: 16px;
+    background: #f8faff;
+    transition: all 0.3s ease;
+    box-sizing: border-box; /* 确保padding包含在width内 */
+}
+        #messageInput:focus {
+            outline: none;
+            border-color: #4a6ee0;
+            box-shadow: 0 0 0 3px rgba(74, 110, 224, 0.1);
+        }
+
+        .file-upload-btn {
+            position: absolute;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #f0f5ff;
+            color: #4a6ee0;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .file-upload-btn:hover {
+            background: #e0e9ff;
+            transform: translateY(-50%) scale(1.05);
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, #4a6ee0 0%, #6a8eff 100%);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(74, 110, 224, 0.2);
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(74, 110, 224, 0.3);
+        }
+
+        .history-panel {
+            width: 320px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-header {
+            font-size: 22px;
+            margin-bottom: 25px;
+            color: #2c3e50;
+            font-weight: 500;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f5ff;
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .history-item {
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+            border-left: 4px solid #e6edff;
+        }
+
+        .history-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .history-item.correct {
+            background: #f5f9f0;
+            border-left-color: #B9CAAF;
+        }
+
+        .history-item.incorrect {
+            background: #fff5f5;
+            border-left-color: #FFC7CE;
+        }
+
+        .history-item.uncertain {
+            background: #f8f9fa;
+            border-left-color: #DADADA;
+        }
+
+        .history-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .history-item-text {
+            font-size: 15px;
+            color: #4b5563;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-item-date {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 25px;
+            color: #6c7a89;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #e6edff;
+            border-top: 3px solid #4a6ee0;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-content">
+            <div class="header">
+                <div class="logo">
+    <img src="images/logo.png" alt="辟谣系统">
+</div>
+                <div class="title">虚假新闻检测器</div>
+                <div class="subtitle">基于Streamlit、BGE-M3和LLM开发</div>
+            </div>
+
+            <div class="examples">
+                <h3>🔍 使用示例</h3>
+                <div class="example-item">
+                    <strong>示例1：</strong> "2025年9月，中国全国新型冠状病毒感染病例66915人，死亡4人"
+                </div>
+                <div class="example-item">
+                    <strong>示例2：</strong> "没有家族史就不会得乳腺癌"
+                </div>
+                <div class="example-item">
+                    <strong>示例3：</strong> "基孔肯亚热会通过人际直接传播"
+                </div>
+                <div class="example-item">
+                    <strong>示例4：</strong> "无论何种蚊子，都有可能传播基孔肯亚热"
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="messages" id="messages">
+                    <div class="ai-message">
+                        <div class="message">您好！我是AI辟谣助手，请发送您想要验证的信息，我会帮您判断真伪。您也可以上传文档进行分析。</div>
+                    </div>
+                </div>
+                <div class="loading" id="loading">AI正在分析中...</div>
+                <div class="input-area">
+                    <div class="input-wrapper">
+                        <textarea id="messageInput" placeholder="请输入您想要验证的信息或上传文档..." rows="3"></textarea>
+                        <button class="file-upload-btn" onclick="document.getElementById('fileInput').click()">
+                            上传文件
+                        </button>
+                        <input type="file" id="fileInput" accept=".txt,.pdf,.doc,.docx" onchange="handleFileUpload(event)">
+                    </div>
+                    <button class="send-btn" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="history-panel">
+            <div class="history-header">历史记录</div>
+            <div class="history-list" id="historyList">
+                <!-- 历史记录将动态添加到这里 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟的历史记录数据
+        let historyData = [
+            {
+                text: "过期药物没变质，还可继续服用",
+                result: "incorrect",
+                date: "2024-01-15 14:30",
+                fullResponse: "错误：过期药物没变质，不可以继续服用"
+            },
+            {
+                text: "2025年中国的流感流行季可能提前到来，流行毒株也与2024年不同",
+                result: "correct",
+                date: "2024-01-15 13:45",
+                fullResponse: "正确：2025年中国的流感流行季可能提前到来"
+            },
+            {
+                text: "2025年10月6日一10月12日，中国南方省份流感病毒检测阳性率小幅上升",
+                result: "uncertain",
+                date: "2024-01-15 12:20",
+                fullResponse: "无法判断：超出知识库范围。"
+            }
+        ];
+
+        // 加载历史记录
+        function loadHistory() {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+
+            historyData.forEach((item, index) => {
+                const historyItem = document.createElement('div');
+                historyItem.className = `history-item ${item.result}`;
+                historyItem.innerHTML = `
+                    <div class="history-item-header">
+                        <span class="result-indicator result-${item.result}">
+                            ${item.result === 'correct' ? '正确' : item.result === 'incorrect' ? '错误' : '无法判断'}
+                        </span>
+                        <span class="history-item-date">${item.date}</span>
+                    </div>
+                    <div class="history-item-text">${item.text}</div>
+                `;
+                historyItem.onclick = () => showHistoryItem(item);
+                historyList.appendChild(historyItem);
+            });
+        }
+
+        // 显示历史记录详情
+        function showHistoryItem(item) {
+            const messages = document.getElementById('messages');
+            messages.innerHTML = `
+                <div class="ai-message">
+                    <div class="message">
+                        <span class="result-indicator result-${item.result}">
+                            ${item.result === 'correct' ? '✅ 正确' : item.result === 'incorrect' ? '❌ 错误' : '❓ 无法判断'}
+                        </span>
+                        ${item.fullResponse}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // 添加用户消息
+            addMessage(message, 'user');
+            input.value = '';
+
+            // 显示加载状态
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                // 模拟API调用（实际使用时需要替换为真实的DeepSeek API）
+                const response = await simulateAIResponse(message);
+
+                // 隐藏加载状态
+                document.getElementById('loading').style.display = 'none';
+
+                // 添加AI回复
+                addMessage(response.text, 'ai', response.result);
+
+                // 添加到历史记录
+                addToHistory(message, response.result, response.text);
+
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                addMessage('抱歉，分析过程中出现错误，请稍后重试。', 'ai', 'uncertain');
+            }
+        }
+
+        // 添加消息到聊天区域
+        function addMessage(text, sender, result = null) {
+            const messages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `${sender}-message`;
+
+            let resultHtml = '';
+            if (result) {
+                const resultText = result === 'correct' ? '正确' : result === 'incorrect' ? '错误' : '无法判断';
+                resultHtml = `<span class="result-indicator result-${result}">${resultText}</span>`;
+            }
+
+            messageDiv.innerHTML = `<div class="message">${resultHtml}${text}</div>`;
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // 模拟AI响应（实际使用时需要替换为真实的DeepSeek API调用）
+        // 实际使用时替换模拟函数
+// 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // 添加用户消息
+            addMessage(message, 'user');
+            input.value = '';
+
+            // 显示加载状态
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                // 模拟API调用（实际使用时需要替换为真实的DeepSeek API）
+                const response = await simulateAIResponse(message);
+
+                // 隐藏加载状态
+                document.getElementById('loading').style.display = 'none';
+
+                // 添加AI回复
+                addMessage(response.text, 'ai', response.result);
+
+                // 添加到历史记录
+                addToHistory(message, response.result, response.text);
+
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                addMessage('抱歉，分析过程中出现错误，请稍后重试。', 'ai', 'uncertain');
+            }
+        }
+
+        // 添加消息到聊天区域
+        function addMessage(text, sender, result = null) {
+            const messages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `${sender}-message`;
+
+            let resultHtml = '';
+            if (result) {
+                const resultText = result === 'correct' ? '✅ 正确' : result === 'incorrect' ? '❌ 错误' : '❓ 无法判断';
+                resultHtml = `<span class="result-indicator result-${result}">${resultText}</span>`;
+            }
+
+            messageDiv.innerHTML = `<div class="message">${resultHtml}${text}</div>`;
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // 模拟AI响应（实际使用时需要替换为真实的DeepSeek API调用）
+        async function simulateAIResponse(message) {
+            const response = await fetch('http://localhost:5000/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('API 请求失败');
+            }
+            
+            return await response.json();
+        }
+
+
+
+        // 添加到历史记录
+        function addToHistory(text, result, fullResponse) {
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+            historyData.unshift({
+                text: text,
+                result: result,
+                date: dateStr,
+                fullResponse: fullResponse
+            });
+
+            // 限制历史记录数量
+            if (historyData.length > 20) {
+                historyData = historyData.slice(0, 20);
+            }
+
+            loadHistory();
+        }
+
+        // 处理文件上传
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const input = document.getElementById('messageInput');
+                input.value = `📄 已上传文件：${file.name}\n请分析此文档内容...`;
+            }
+        }
+
+        // 回车发送消息
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // 页面加载时初始化
+        window.onload = function() {
+            loadHistory();
+        };
+    </script>
+</body>
+</html>

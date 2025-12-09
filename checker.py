@@ -7,13 +7,24 @@ import numpy as np
 import re
 
 class RumorChecker:
-    def __init__(self, api_base: str, api_key: str, model: str):
-        self.api_base = api_base
-        self.api_key = api_key
-        self.model = model
-        self.client = OpenAI(api_key = api_key,
+    def __init__(self, api_setting: List[Dict[str, str]]):
+        self.api_base = api_setting[0]["api_base"]
+        self.api_key = api_setting[0]["api_key"]
+        self.base_model = api_setting[0]["model_name"]
+        self.base_client = OpenAI(api_key = self.api_key,
+                             base_url = self.api_base)
+        
+        self.client = []
+        self.model = []
+        for i in range(len(api_setting)):
+            api_base = api_setting[i]["api_base"]
+            api_key = api_setting[i]["api_key"]
+            model_name = api_setting[i]["model_name"]
+            client = OpenAI(api_key = api_key,
                              base_url = api_base)
-
+            self.client.append(client)
+            self.model.append(model_name)
+    
     def _get_prompts(self):
         prompts = {
             "zh": {
@@ -104,8 +115,8 @@ class RumorChecker:
             if lang not in translations:
                 if lang not in translation_prompt:
                     continue
-                response = self.client.chat.completions.create(
-                    model=self.model,
+                response = self.base_client.chat.completions.create(
+                    model=self.base_model,
                     messages=[
                         {"role": "system", "content": "You are a professional translator. Translate accurately and concisely."},
                         {"role": "user", "content": translation_prompt[lang]}
@@ -144,8 +155,8 @@ class RumorChecker:
     def _extract_keywords(self, text: str):
         prompts = self._get_prompts()
         lang = self._detect_language(text)
-        response = self.client.chat.completions.create(
-            model=self.model,
+        response = self.base_client.chat.completions.create(
+            model=self.base_model,
             messages=[
                 {"role": "system", "content": prompts[lang]["extract_keyword"]},
                 {"role": "user", "content": text}
@@ -195,8 +206,8 @@ class RumorChecker:
     def extract_key_info(self, claim: str):
         print("Extracting key information from claim...\n")
         prompts = self._get_prompts()
-        response = self.client.chat.completions.create(
-            model=self.model,
+        response = self.base_client.chat.completions.create(
+            model=self.base_model,
             messages=[
                 {"role": "system", "content": prompts["en"]["extract_claim"]},
                 {"role": "user", "content": prompts["en"]["user_extract"] + "\n" + claim}
@@ -305,8 +316,8 @@ class RumorChecker:
                 ),
             },
         ]
-        response = self.client.chat.completions.create(
-            model=self.model,
+        response = self.base_client.chat.completions.create(
+            model=self.base_model,
             messages=messages,
             temperature=0,
             max_tokens=500,
@@ -366,6 +377,7 @@ class RumorChecker:
 
         # 2. Search for related information using the API
         # TODO: Implement database search
+        # TODO: Implement multi-source search
         related_info = self.search_related_info(key_info)
         print(f"Found {len(related_info)} related information pieces.\n")
 
@@ -373,16 +385,106 @@ class RumorChecker:
 
         # 3. Analyze the related information to determine if the claim is a rumor
         is_rumor = self.analyze_information(claim, evidence_chunks)
-        
+
         result = {
             "claim": claim,
             "is_rumor": is_rumor,
             "related_info": related_info
         }
         return result
+    
+    def _result_parser(self, result_text: str) -> Dict[str, Any]:
+        if result_text:
+            # Replace problematic Unicode characters
+            result_text = result_text.replace('\u2011', '-')  # Non-breaking hyphen to normal hyphen
+            result_text = result_text.replace('\u2013', '-')  # En dash to normal hyphen
+            result_text = result_text.replace('\u2014', '-')  # Em dash to normal hyphen
+            result_text = result_text.replace('\u2010', '-')  # Hyphen to normal hyphen
+            # Remove other potentially problematic characters
+            result_text = ''.join(char for char in result_text if ord(char) < 65536)
+        verdict_match = re.search(
+                r"(?:VERDICT|判断|结论)[:：]\s*(TRUE|FALSE|PARTIALLY TRUE|正确|错误|部分正确|无法验证)",
+                result_text,
+                re.IGNORECASE,
+            )
+        if verdict_match:
+            verdict_raw = verdict_match.group(1).upper()
+            # Map Chinese terms to English
+            if verdict_raw in ["正确", "TRUE"]:
+                verdict = "TRUE"
+            elif verdict_raw in ["错误", "FALSE"]:
+                verdict = "FALSE"
+            elif verdict_raw in ["部分正确", "PARTIALLY TRUE"]:
+                verdict = "PARTIALLY TRUE"
+            else:
+                verdict = "UNVERIFIABLE"
+        else:
+            # Try to infer from content if no explicit verdict found
+            if "is true" in result_text.lower() or "supported" in result_text.lower():
+                verdict = "TRUE"
+            elif "is false" in result_text.lower() or "contradicted" in result_text.lower():
+                verdict = "FALSE"
+            else:
+                verdict = "UNVERIFIABLE"
+        reasoning_match = re.search(
+                r"(?:REASONING|推理过程|推理|分析)[:：]\s*(.*)",
+                result_text,
+                re.DOTALL | re.IGNORECASE,
+            )
+        reasoning = (
+            reasoning_match.group(1).strip()
+            if reasoning_match
+            else result_text.strip()
+        )
+        return {"verdict": verdict, "reasoning": reasoning}
+
+    def check_with_client(self, claim: str, client: OpenAI, model_name: str):
+        # Analyze the claim directly using the provided client
+        prompt = """
+                You are a fact-checking assistant. Judge if the claim is true based on evidence.
+
+                Format required:
+                VERDICT: TRUE/FALSE/PARTIALLY TRUE
+                REASONING: Your reasoning process
+                """
+        messages = [
+            {"role": "system", "content": prompt},
+            {
+                "role": "user",
+                "content": f"CLAIM: {claim}\nPlease determine whether the claim is correct.",
+            },
+        ]
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            temperature=0,
+            max_tokens=500,
+        )
+        result_text = response.choices[0].message.content
+        result = self._result_parser(result_text)
+        print(f"Result from model {model_name}:{result["verdict"]}\n")
+        return result
 
 
-def check_rumor(claim: str, api_base: str, api_key: str, model: str):
-    checker = RumorChecker(api_base, api_key, model)
+    def check_by_LLM(self, claim: str):
+        # Directly analyze the claim using LLM without external evidence
+        # Using multi-client to get diverse perspectives
+        combined_responses = []
+        for i in range(len(self.client)):
+            print(f"Checking with client {i+1} using model {self.model[i]}...\n")
+            for j in range(3):  # Get multiple responses per client
+                response = self.check_with_client(claim, self.client[i], self.model[i])
+                combined_responses.append(response)
+        return combined_responses
+
+
+def check_rumor(claim: str, api_setting: List[Dict[str, str]]):
+    checker = RumorChecker(api_setting)
     result = checker.check(claim)
+    return result
+
+def check_by_LLM(claim: str, api_setting: List[Dict[str, str]]):
+    print("Checking by LLM...")
+    checker = RumorChecker(api_setting)
+    result = checker.check_by_LLM(claim)
     return result
