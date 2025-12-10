@@ -22,11 +22,11 @@ def get_api():
     client_info_3 = {"api_base": "https://api.moonshot.cn/v1",
                     "api_key": "sk-Qu9H5NKr5NGnVVjcjBiKh5UsN9b7q4juv2CtzYhz386mDfyN",
                     "model_name": "kimi-k2-0711-preview"}
-    api_setting.append(client_info_2)
+    api_setting.append(client_info_3)
     client_info_4 = {"api_base": "https://aihubmix.com/v1",
                     "api_key": "sk-BsPxLFuT1VMaBv39532f2959Ba8d4bAcB7E6BeF69bB45c89",
                     "model_name": "chatgpt-4o-latest"}
-    api_setting.append(client_info_2)
+    api_setting.append(client_info_4)
     return api_setting
 
 def fileProcess(data):
