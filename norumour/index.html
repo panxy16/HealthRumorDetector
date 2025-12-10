@@ -434,6 +434,10 @@
     </div>
 
     <script>
+        // 文件存储
+        let uploadedFileContent = null;
+        let uploadedFileName = null;
+        let uploadedFileType = null;
         // 模拟的历史记录数据
         let historyData = [
             {
@@ -493,38 +497,6 @@
             `;
         }
 
-        // 发送消息
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-
-            if (!message) return;
-
-            // 添加用户消息
-            addMessage(message, 'user');
-            input.value = '';
-
-            // 显示加载状态
-            document.getElementById('loading').style.display = 'block';
-
-            try {
-                // 模拟API调用（实际使用时需要替换为真实的DeepSeek API）
-                const response = await simulateAIResponse(message);
-
-                // 隐藏加载状态
-                document.getElementById('loading').style.display = 'none';
-
-                // 添加AI回复
-                addMessage(response.text, 'ai', response.result);
-
-                // 添加到历史记录
-                addToHistory(message, response.result, response.text);
-
-            } catch (error) {
-                document.getElementById('loading').style.display = 'none';
-                addMessage('抱歉，分析过程中出现错误，请稍后重试。', 'ai', 'uncertain');
-            }
-        }
 
         // 添加消息到聊天区域
         function addMessage(text, sender, result = null) {
@@ -550,18 +522,44 @@
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
 
-            if (!message) return;
+            // 确定要发送的数据
+            let dataToSend;
+            let userMessageToDisplay;
+
+            if (uploadedFileContent && uploadedFileName) {
+                // 如果有已加载的文件内容，发送文件内容和文件名
+                userMessageToDisplay = `📄 文件: ${uploadedFileName}`;
+                dataToSend = {
+                    type: 'file',
+                    content: uploadedFileContent, // Base64 字符串
+                    fileName: uploadedFileName,
+                    fileType: uploadedFileType // 传输文件MIME类型
+                };
+                // 发送后清除文件内容
+                uploadedFileContent = null;
+                uploadedFileName = null;
+            } else if (message && message !== '请点击“发送”开始分析...') {
+                // 如果是纯文本消息
+                userMessageToDisplay = message;
+                dataToSend = {
+                    type: 'text',
+                    content: message
+                };
+            } else {
+                // 无有效输入
+                return;
+            }
 
             // 添加用户消息
-            addMessage(message, 'user');
+            addMessage(userMessageToDisplay, 'user');
             input.value = '';
 
             // 显示加载状态
             document.getElementById('loading').style.display = 'block';
 
             try {
-                // 模拟API调用（实际使用时需要替换为真实的DeepSeek API）
-                const response = await simulateAIResponse(message);
+                // 调用统一的 AI 响应函数
+                const response = await simulateAIResponse(dataToSend);
 
                 // 隐藏加载状态
                 document.getElementById('loading').style.display = 'none';
@@ -570,9 +568,11 @@
                 addMessage(response.text, 'ai', response.result);
 
                 // 添加到历史记录
-                addToHistory(message, response.result, response.text);
+                // 历史记录使用用户显示的 message
+                addToHistory(userMessageToDisplay, response.result, response.text);
 
             } catch (error) {
+                console.error('API Error:', error);
                 document.getElementById('loading').style.display = 'none';
                 addMessage('抱歉，分析过程中出现错误，请稍后重试。', 'ai', 'uncertain');
             }
@@ -596,19 +596,20 @@
         }
 
         // 模拟AI响应（实际使用时需要替换为真实的DeepSeek API调用）
-        async function simulateAIResponse(message) {
+        async function simulateAIResponse(dataToSend) {
             const response = await fetch('http://localhost:5000/api/analyze', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    message: message
-                })
+                body: JSON.stringify(dataToSend) // 发送统一的数据结构
             });
             
             if (!response.ok) {
-                throw new Error('API 请求失败');
+                // 尝试读取错误信息
+                const errorText = await response.text();
+                console.error('API Request Failed. Status:', response.status, 'Error:', errorText);
+                throw new Error(`API 请求失败: ${response.status} - ${errorText.substring(0, 100)}...`);
             }
             
             return await response.json();
@@ -640,8 +641,28 @@
         function handleFileUpload(event) {
             const file = event.target.files[0];
             if (file) {
+                uploadedFileName = file.name;
+                uploadedFileType = file.type;
                 const input = document.getElementById('messageInput');
-                input.value = `📄 已上传文件：${file.name}\n请分析此文档内容...`;
+                
+                if(file.size > 10 * 1024 * 1024) { 
+                    alert('文件过大，请上传小于 10MB 的文件。');
+                    input.value = '';
+                    uploadedFileContent = null;
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    // 使用 readAsDataURL 读取，得到 Base64 字符串
+                    uploadedFileContent = e.target.result; 
+                    
+                    // 在输入框显示文件信息
+                    input.value = `📄 已加载文件: ${uploadedFileName} (${(file.size / 1024 / 1024).toFixed(2)} MB, 类型: ${uploadedFileType})\n请点击“发送”开始分析...`;
+                };
+                
+                // 读取文件为 Data URL (Base64 编码)
+                reader.readAsDataURL(file);
             }
         }
 

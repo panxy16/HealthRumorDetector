@@ -411,9 +411,9 @@ class RumorChecker:
             verdict_raw = verdict_match.group(1).upper()
             # Map Chinese terms to English
             if verdict_raw in ["正确", "TRUE"]:
-                verdict = "TRUE"
+                verdict = "correct"
             elif verdict_raw in ["错误", "FALSE"]:
-                verdict = "FALSE"
+                verdict = "incorrect"
             elif verdict_raw in ["部分正确", "PARTIALLY TRUE"]:
                 verdict = "PARTIALLY TRUE"
             else:
@@ -421,9 +421,9 @@ class RumorChecker:
         else:
             # Try to infer from content if no explicit verdict found
             if "is true" in result_text.lower() or "supported" in result_text.lower():
-                verdict = "TRUE"
+                verdict = "correct"
             elif "is false" in result_text.lower() or "contradicted" in result_text.lower():
-                verdict = "FALSE"
+                verdict = "incorrect"
             else:
                 verdict = "UNVERIFIABLE"
         reasoning_match = re.search(
@@ -440,6 +440,7 @@ class RumorChecker:
 
     def check_with_client(self, claim: str, client: OpenAI, model_name: str):
         # Analyze the claim directly using the provided client
+        print(f"Checking claim with model {model_name}...\n")
         prompt = """
                 You are a fact-checking assistant. Judge if the claim is true based on evidence.
 
@@ -460,6 +461,7 @@ class RumorChecker:
             temperature=0,
             max_tokens=500,
         )
+        print("Successfully got response from model.\n")
         result_text = response.choices[0].message.content
         result = self._result_parser(result_text)
         print(f"Result from model {model_name}:{result["verdict"]}\n")
@@ -476,6 +478,11 @@ class RumorChecker:
                 response = self.check_with_client(claim, self.client[i], self.model[i])
                 combined_responses.append(response)
         return combined_responses
+    
+    def check_by_single_LLM(self, claim: str):
+        # Directly analyze the claim using LLM without external evidence
+        response = self.check_with_client(claim, self.base_client, self.base_model)
+        return response
 
 
 def check_rumor(claim: str, api_setting: List[Dict[str, str]]):
@@ -483,8 +490,11 @@ def check_rumor(claim: str, api_setting: List[Dict[str, str]]):
     result = checker.check(claim)
     return result
 
-def check_by_LLM(claim: str, api_setting: List[Dict[str, str]]):
+def check_by_LLM(claim: str, api_setting: List[Dict[str, str]], method = "single"):
     print("Checking by LLM...")
     checker = RumorChecker(api_setting)
-    result = checker.check_by_LLM(claim)
+    if method == "multi":
+        result = checker.check_by_LLM(claim)
+    elif method == "single":
+        result = checker.check_by_single_LLM(claim)
     return result

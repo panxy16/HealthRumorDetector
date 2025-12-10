@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 import checker
 import pictureProcess
 from pathlib import Path
+import base64
+import re
 
 def get_api():
     api_setting = []
@@ -27,14 +29,35 @@ def get_api():
     api_setting.append(client_info_2)
     return api_setting
 
-def analyze_input(user_message):
-    # 判断输入是否是文本
-    claim = ""
+def fileProcess(data):
+    """处理 Base64 编码的文件内容"""
+    file_name = data.get('fileName', '未知文件')
+    file_type = data.get('fileType', '未知类型')
+    base64_data_url = data.get('content')
 
+    # 1. 解析 Base64 数据：去除前缀 'data:image/png;base64,'
+    base64_match = re.search(r'base64,(.*)', base64_data_url)
+    if not base64_match:
+        return {"result": "uncertain", "text": "文件解析失败，Base64 格式错误。"}
 
+    pure_base64 = base64_match.group(1)
+    # 将 Base64 解码为原始字节数据 (bytes)
+    try:
+        file_bytes = base64.b64decode(pure_base64)
+    except Exception as e:
+        return {"result": "uncertain", "text": f"Base64 解码失败: {e}"}
 
-def analyze_text(text):
-    answer = f"{type(text)}"
-    result = f"{type(text)}"
-    res = {'answer': answer, 'category': result}
-    return res
+    # 2. 使用 pictureProcess 提取文本内容
+
+    return {"result": "uncertain", "text": f"已识别到文件 ({file_name})，文件类型({file_type})，内容待核查。"}
+
+def textProcess(data):
+    """根据输入类型和内容进行处理"""
+    content = data.get('content')
+    api = get_api()
+    method = "single"       # single or multi
+    LLM_result = checker.check_by_LLM(content, api, method=method)
+    result = LLM_result["verdict"]
+    response_text = LLM_result["reasoning"]
+
+    return {"result": result, "text": response_text}
