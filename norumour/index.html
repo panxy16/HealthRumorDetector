@@ -56,7 +56,16 @@
     /* 移除或注释掉这行 */
     /* background: linear-gradient(135deg, #4a6ee0 0%, #6a8eff 100%); */
 }
-
+/* ---- 六段论证新增 ---- */
+.argument-box{margin-top:14px;border-top:1px dashed #d0dcee;padding-top:14px;font-size:15px;line-height:1.7}
+.arg-section{margin-bottom:10px}
+.arg-title{font-weight:600;color:#4a6ee0;margin-bottom:4px}
+.arg-content{padding-left:22px;color:#2c3e50}
+ /* ===== 六段标题专属颜色 ===== */
+.arg-title.claim { color: #8B8B8B !important; }          /* 原论断 */
+.arg-title.rebuttal { color: #FFC7CE !important; }      /* 反驳/例外 */
+/* 其余四项统一绿色 */
+.arg-section:not(.claim):not(.rebuttal) .arg-title { color: #8EB377 !important; }
 .logo img {
     width: 100%;
     height: 100%;
@@ -376,7 +385,57 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #a8a8a8;
         }
+/* ===== 结构化论证 ===== */
+.argument-box{
+    margin-top: 12px;
+    border-top: 1px dashed #d0dcee;
+    padding-top: 12px;
+    font-size: 15px;
+    line-height: 1.7;
+}
+.arg-section{
+    margin-bottom: 10px;
+}
+.arg-title{
+    font-weight: 600;
+    color: #4a6ee0;
+    margin-bottom: 4px;
+}
+.arg-content{
+    padding-left: 22px;
+    color: #2c3e50;
+}
+/* 结论条依旧用旧颜色类 */
     </style>
+    <!-- 结构化论证模板 -->
+<template id="argumentTpl">
+  <div class="argument-box">
+    <div class="arg-section claim">
+      <div class="arg-title">📌 原论断</div>
+      <div class="arg-content"></div>
+    </div>
+    <div class="arg-section data">
+      <div class="arg-title">📊 数据 / 证据</div>
+      <div class="arg-content"></div>
+    </div>
+    <div class="arg-section warrant">
+      <div class="arg-title">🔗 推理依据</div>
+      <div class="arg-content"></div>
+    </div>
+    <div class="arg-section backing">
+      <div class="arg-title">🏛️ 权威支撑</div>
+      <div class="arg-content"></div>
+    </div>
+    <div class="arg-section qualifier">
+      <div class="arg-title">⚠️ 限定条件</div>
+      <div class="arg-content"></div>
+    </div>
+    <div class="arg-section rebuttal">
+      <div class="arg-title">🚫 反驳 / 例外</div>
+      <div class="arg-content"></div>
+    </div>
+  </div>
+</template>
 </head>
 <body>
     <div class="container">
@@ -499,18 +558,37 @@
 
 
         // 添加消息到聊天区域
-        function addMessage(text, sender, result = null) {
+        // 统一入口：verdict → explanation → 六段
+        function addMessage(text, sender, result = null, json = null) {
             const messages = document.getElementById('messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `${sender}-message`;
 
+            /* ---------- 1. 彩色结论条 ---------- */
             let resultHtml = '';
             if (result) {
-                const resultText = result === 'correct' ? '正确' : result === 'incorrect' ? '错误' : '无法判断';
+                const resultText = result === 'correct' ? '正确' :
+                                result === 'incorrect' ? '错误' : '无法判断';
                 resultHtml = `<span class="result-indicator result-${result}">${resultText}</span>`;
             }
 
-            messageDiv.innerHTML = `<div class="message">${resultHtml}${text}</div>`;
+            /* ---------- 2. 一句话解释 ---------- */
+            let html = `<div class="message">${resultHtml}${text}`;
+
+            /* ---------- 3. 六段框架（仅 AI 且带 JSON） ---------- */
+            if (json && sender === 'ai') {
+                const tpl = document.getElementById('argumentTpl').content.cloneNode(true);
+                const fields = ['claim','data','warrant','backing','qualifier','rebuttal'];
+                fields.forEach(f => {
+                    tpl.querySelector(`.${f} .arg-content`).textContent = json[f] || '——';
+                });
+                const tmp = document.createElement('div');
+                tmp.appendChild(tpl);
+                html += tmp.innerHTML;
+            }
+
+            html += '</div>';
+            messageDiv.innerHTML = html;
             messages.appendChild(messageDiv);
             messages.scrollTop = messages.scrollHeight;
         }
@@ -560,39 +638,21 @@
             try {
                 // 调用统一的 AI 响应函数
                 const response = await simulateAIResponse(dataToSend);
-
                 // 隐藏加载状态
                 document.getElementById('loading').style.display = 'none';
 
-                // 添加AI回复
-                addMessage(response.text, 'ai', response.result);
-
+                // 添加AI回复 改了新格式！！
+               // addMessage(response.text, 'ai', response.result);
+                addMessage(response.explanation, 'ai', response.verdict, response);
                 // 添加到历史记录
                 // 历史记录使用用户显示的 message
-                addToHistory(userMessageToDisplay, response.result, response.text);
+                addToHistory(userMessageToDisplay, response.verdict, response.text);
 
             } catch (error) {
                 console.error('API Error:', error);
                 document.getElementById('loading').style.display = 'none';
                 addMessage('抱歉，分析过程中出现错误，请稍后重试。', 'ai', 'uncertain');
             }
-        }
-
-        // 添加消息到聊天区域
-        function addMessage(text, sender, result = null) {
-            const messages = document.getElementById('messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `${sender}-message`;
-
-            let resultHtml = '';
-            if (result) {
-                const resultText = result === 'correct' ? '✅ 正确' : result === 'incorrect' ? '❌ 错误' : '❓ 无法判断';
-                resultHtml = `<span class="result-indicator result-${result}">${resultText}</span>`;
-            }
-
-            messageDiv.innerHTML = `<div class="message">${resultHtml}${text}</div>`;
-            messages.appendChild(messageDiv);
-            messages.scrollTop = messages.scrollHeight;
         }
 
         // 模拟AI响应（实际使用时需要替换为真实的DeepSeek API调用）

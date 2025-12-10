@@ -57,7 +57,26 @@ def textProcess(data):
     api = get_api()
     method = "single"       # single or multi
     LLM_result = checker.check_by_LLM(content, api, method=method)
-    result = LLM_result["verdict"]
-    response_text = LLM_result["reasoning"]
+    # result = LLM_result["verdict"]
+    # response_text = LLM_result["reasoning"]
+    response = {
+        "claim" : "", 
+        "data" : "", 
+        "warrant" : "",
+        "backing" : "",
+        "qualifier" : "",
+        "rebuttal" : "",
+        "verdict" : "",
+        "explanation" : ""
+    }
+    for key, value in LLM_result.items():
+        print(f"{key}: {value[:80]}..." if len(value) > 80 else f"{key}: {value}")
+        key = key.lower()
+        if key in response:
+            response[key] = str(value)
+            if value == "supported":
+                response[key] = "correct"
+            elif value == "refuted":
+                response[key] = "incorrect"
 
-    return {"result": result, "text": response_text}
+    return response
