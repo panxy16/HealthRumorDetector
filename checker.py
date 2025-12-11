@@ -59,22 +59,14 @@ class RumorChecker:
         response = client.chat.completions.create(
             model=model_name,
             messages=messages,
-            temperature=0,
-            max_tokens=500,
+            temperature=0.3,
+            max_tokens=1000,
+            response_format={"type": "json_object"}, 
         )
-        print("Successfully got response from model.\n")
+        # 此时 response.choices[0].message.content 应该是一个纯 JSON 字符串
         result_text = response.choices[0].message.content
-        # Extract JSON from the response
-        json_match = re.search(r'```json(.*?)```', result_text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1).strip()
-            try:
-                data_dict: Dict[str, str] = json.loads(json_str)
-                print("Successfully parsed JSON from the model response.")
-                return data_dict
-            except json.JSONDecodeError:
-                print("Failed to decode JSON from the model response.")
-        return result_text
+        data_dict: Dict[str, str] = json.loads(result_text)
+        return data_dict
 
 
     def check_by_single_LLM(self, claim: str):

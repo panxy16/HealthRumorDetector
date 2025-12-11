@@ -10,7 +10,6 @@ CORS(app)  # 允许跨域请求
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
-    # ... (JSON 检查逻辑)
     data = request.get_json()
     input_type = data.get('type')
     
